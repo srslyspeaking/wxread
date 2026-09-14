@@ -1,13 +1,13 @@
-name: WeRead daily
+name: WeRead twice daily
 
 on:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 10,23 * * *"
       timezone: "Europe/Brussels"
   workflow_dispatch:
     inputs:
       read_minutes:
-        description: "本次目标阅读分钟数（留空则使用仓库变量 READ_MINUTES 或默认 68）"
+        description: "本次目标阅读分钟数（留空则使用仓库变量 READ_MINUTES 或默认 80）"
         required: false
         type: string
 
@@ -48,5 +48,5 @@ jobs:
       - name: Run WeRead automation
         env:
           WXREAD_CURL_BASH: ${{ secrets.WXREAD_CURL_BASH }}
-          READ_MINUTES: ${{ inputs.read_minutes || vars.READ_MINUTES || '68' }}
+          READ_MINUTES: ${{ inputs.read_minutes || vars.READ_MINUTES || '80' }}
         run: python main.py
