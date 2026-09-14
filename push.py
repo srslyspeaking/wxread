@@ -38,10 +38,10 @@ class PushNotification:
                     self.pushplus_url,
                     data=json.dumps({"token": token, "title": title,"content": content,}).encode("utf-8"),headers=self.headers,timeout=10,)
                 response.raise_for_status()
-                logger.info("PushPlus 响应: %s", response.text)
+                logger.info("PushPlus 推送成功。")
                 return True
-            except requests.exceptions.RequestException as exc:
-                logger.error("PushPlus 推送失败: %s", exc)
+            except requests.exceptions.RequestException:
+                logger.error("PushPlus 推送失败。")
                 if attempt < attempts - 1:
                     sleep_time = random.randint(180, 360)
                     logger.info("%d 秒后重试...", sleep_time)
@@ -54,17 +54,18 @@ class PushNotification:
 
         try:
             response = requests.post(url, json=payload, proxies=self.proxies, timeout=30)
-            logger.info("Telegram 响应: %s", response.text)
             response.raise_for_status()
+            logger.info("Telegram 推送成功。")
             return True
-        except Exception as exc:
-            logger.error("Telegram 代理发送失败: %s", exc)
+        except requests.exceptions.RequestException:
+            logger.error("Telegram 代理发送失败，正在尝试直连。")
             try:
                 response = requests.post(url, json=payload, timeout=30)
                 response.raise_for_status()
+                logger.info("Telegram 推送成功。")
                 return True
-            except Exception as inner_exc:
-                logger.error("Telegram 发送失败: %s", inner_exc)
+            except requests.exceptions.RequestException:
+                logger.error("Telegram 推送失败。")
                 return False
 
     def push_wxpusher(self, content, spt):
@@ -75,10 +76,10 @@ class PushNotification:
             try:
                 response = requests.get(url, timeout=10)
                 response.raise_for_status()
-                logger.info("WxPusher 响应: %s", response.text)
+                logger.info("WxPusher 推送成功。")
                 return True
-            except requests.exceptions.RequestException as exc:
-                logger.error("WxPusher 推送失败: %s", exc)
+            except requests.exceptions.RequestException:
+                logger.error("WxPusher 推送失败。")
                 if attempt < attempts - 1:
                     sleep_time = random.randint(180, 360)
                     logger.info("%d 秒后重试...", sleep_time)
@@ -100,10 +101,10 @@ class PushNotification:
                     timeout=10,
                 )
                 response.raise_for_status()
-                logger.info("ServerChan 响应: %s", response.text)
+                logger.info("ServerChan 推送成功。")
                 return True
-            except requests.exceptions.RequestException as exc:
-                logger.error("ServerChan 推送失败: %s", exc)
+            except requests.exceptions.RequestException:
+                logger.error("ServerChan 推送失败。")
                 if attempt < attempts - 1:
                     sleep_time = random.randint(180, 360)
                     logger.info("%d 秒后重试...", sleep_time)
