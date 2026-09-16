@@ -1,8 +1,8 @@
-name: WeRead twice daily
+name: WeRead four times daily
 
 on:
   schedule:
-    - cron: "0 10,23 * * *"
+    - cron: "0 10,12,14,23 * * *"
       timezone: "Europe/Brussels"
   workflow_dispatch:
     inputs:
