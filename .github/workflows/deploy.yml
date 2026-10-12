@@ -1,13 +1,19 @@
-name: WeRead four times daily
+name: WeRead 2h + 2h + 1h daily
 
 on:
   schedule:
-    - cron: "17 10,12,14,23 * * *"
+    # Keep the starts away from the top of the hour, where scheduled runs are
+    # more likely to be delayed. Times are local to Europe/Brussels.
+    - cron: "17 10 * * *"
+      timezone: "Europe/Brussels"
+    - cron: "17 15 * * *"
+      timezone: "Europe/Brussels"
+    - cron: "17 23 * * *"
       timezone: "Europe/Brussels"
   workflow_dispatch:
     inputs:
       read_minutes:
-        description: "本次目标阅读分钟数（留空则使用仓库变量 READ_MINUTES 或默认 80）"
+        description: "本次目标阅读分钟数（1-120；留空则使用仓库变量 READ_MINUTES 或默认 60）"
         required: false
         type: string
 
@@ -22,7 +28,7 @@ concurrency:
 jobs:
   read:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 150
 
     steps:
       - name: Checkout repository
@@ -45,8 +51,31 @@ jobs:
           --require-hashes
           --requirement requirements.txt
 
+      - name: Resolve reading duration
+        id: duration
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_MINUTES: ${{ inputs.read_minutes }}
+          DEFAULT_MINUTES: ${{ vars.READ_MINUTES || '60' }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            minutes="${MANUAL_MINUTES:-$DEFAULT_MINUTES}"
+          else
+            case "$SCHEDULE" in
+              "17 10 * * *"|"17 15 * * *") minutes=120 ;;
+              "17 23 * * *") minutes=60 ;;
+              *)
+                echo "Unsupported schedule: $SCHEDULE" >&2
+                exit 1
+                ;;
+            esac
+          fi
+          printf 'minutes=%s\n' "$minutes" >> "$GITHUB_OUTPUT"
+
       - name: Run WeRead automation
         env:
           WXREAD_CURL_BASH: ${{ secrets.WXREAD_CURL_BASH }}
-          READ_MINUTES: ${{ inputs.read_minutes || vars.READ_MINUTES || '80' }}
+          READ_MINUTES: ${{ steps.duration.outputs.minutes }}
         run: python main.py
