@@ -32,10 +32,10 @@
 2. 打开仓库 **Settings → Secrets and variables → Actions → Secrets**，新建 Repository secret：
    - 名称：`WXREAD_CURL_BASH`
    - 值：上面从 `read` 请求复制的完整 Bash cURL。程序只解析它，不会把它当作命令执行。
-3. 可选：在同一页面的 **Variables** 新建 `READ_MINUTES`，值为 `1` 到 `80`。不配置时为 `68`。
+3. 可选：在同一页面的 **Variables** 新建 `READ_MINUTES`，值为 `1` 到 `120`。它只作为手动运行的默认值；定时任务使用下方固定时长。
 4. 打开 **Actions → WeRead daily → Run workflow** 进行一次手动验证。手动运行时也可临时填写分钟数。
 
-工作流会按 `Europe/Brussels` 时区每天 07:00 触发，并自动适配夏令时。GitHub 定时任务可能因平台负载而延迟，并不保证分秒准时。公开仓库连续 60 天没有活动时，GitHub 可能自动停用定时工作流，需要到 Actions 页面重新启用。工作流权限仅为 `contents: read`，依赖和官方 Actions 均已固定版本；未使用第三方 keepalive、DNS 改写或通知服务。
+工作流按 `Europe/Brussels` 时区每天执行三段：10:17 后 120 分钟、15:17 后 120 分钟、23:17 后 60 分钟，共 300 分钟，并自动适配夏令时。GitHub 定时任务可能因平台负载而延迟，并不保证分秒准时。公开仓库连续 60 天没有活动时，GitHub 可能自动停用定时工作流，需要到 Actions 页面重新启用。工作流权限仅为 `contents: read`，依赖和官方 Actions 均已固定版本；未使用第三方 keepalive、DNS 改写或通知服务。
 
 Cookie 属于账户登录凭据。即使放在 GitHub Secret 中也应限制仓库协作者、谨慎审查后续代码变更；失效后需要重新抓取并替换该 Secret。
 
