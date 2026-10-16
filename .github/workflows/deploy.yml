@@ -1,19 +1,15 @@
-name: WeRead 2h + 2h + 1h daily
+name: WeRead weekly 10-15h
 
 on:
   schedule:
-    # Keep the starts away from the top of the hour, where scheduled runs are
-    # more likely to be delayed. Times are local to Europe/Brussels.
-    - cron: "17 10 * * *"
-      timezone: "Europe/Brussels"
+    # Keep the start away from the top of the hour, where scheduled runs are
+    # more likely to be delayed. The time is local to Europe/Brussels.
     - cron: "17 15 * * *"
-      timezone: "Europe/Brussels"
-    - cron: "17 23 * * *"
       timezone: "Europe/Brussels"
   workflow_dispatch:
     inputs:
       read_minutes:
-        description: "本次目标阅读分钟数（1-120；留空则使用仓库变量 READ_MINUTES 或默认 60）"
+        description: "本次目标阅读分钟数（1-150；留空则使用仓库变量 READ_MINUTES 或默认 60）"
         required: false
         type: string
 
@@ -28,22 +24,38 @@ concurrency:
 jobs:
   read:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 180
 
     steps:
+      - name: Pause automatic reading until Monday
+        id: gate
+        shell: bash
+        run: |
+          local_date="$(TZ=Europe/Brussels date +%F)"
+          printf 'local_date=%s\n' "$local_date" >> "$GITHUB_OUTPUT"
+          if [[ "$local_date" < "2026-10-19" ]]; then
+            printf 'should_run=false\n' >> "$GITHUB_OUTPUT"
+            echo "Automatic reading is paused through 2026-10-18."
+          else
+            printf 'should_run=true\n' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.gate.outputs.should_run == 'true'
         # actions/checkout v6; pinned to an immutable commit.
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
 
       - name: Set up Python
+        if: steps.gate.outputs.should_run == 'true'
         # actions/setup-python v6; pinned to an immutable commit.
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
 
       - name: Install locked dependencies
+        if: steps.gate.outputs.should_run == 'true'
         run: >-
           python -m pip install
           --disable-pip-version-check
@@ -51,31 +63,47 @@ jobs:
           --require-hashes
           --requirement requirements.txt
 
-      - name: Resolve reading duration
-        id: duration
-        shell: bash
+      - name: Resolve weekly reading plan
+        if: steps.gate.outputs.should_run == 'true'
+        id: plan
         env:
           EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
+          LOCAL_DATE: ${{ steps.gate.outputs.local_date }}
           MANUAL_MINUTES: ${{ inputs.read_minutes }}
           DEFAULT_MINUTES: ${{ vars.READ_MINUTES || '60' }}
         run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            minutes="${MANUAL_MINUTES:-$DEFAULT_MINUTES}"
-          else
-            case "$SCHEDULE" in
-              "17 10 * * *"|"17 15 * * *") minutes=120 ;;
-              "17 23 * * *") minutes=60 ;;
-              *)
-                echo "Unsupported schedule: $SCHEDULE" >&2
-                exit 1
-                ;;
-            esac
-          fi
-          printf 'minutes=%s\n' "$minutes" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import os
+          from datetime import date
+
+          from weekly_schedule import weekly_plan
+
+          local_date = date.fromisoformat(os.environ["LOCAL_DATE"])
+          if os.environ["EVENT_NAME"] == "workflow_dispatch":
+              minutes = os.environ.get("MANUAL_MINUTES") or os.environ["DEFAULT_MINUTES"]
+              summary = f"Manual target: {minutes} minutes"
+          else:
+              weekly_total, plan = weekly_plan(local_date)
+              minutes = plan[local_date.weekday()]
+              weekdays = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+              formatted_plan = ", ".join(
+                  f"{name} {value}m" for name, value in zip(weekdays, plan)
+              )
+              summary = (
+                  f"ISO week target: {weekly_total} minutes; "
+                  f"today: {minutes} minutes; plan: {formatted_plan}"
+              )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"minutes={minutes}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write(f"## Reading plan\n\n{summary}\n")
+          print(summary)
+          PY
 
       - name: Run WeRead automation
+        if: steps.gate.outputs.should_run == 'true'
         env:
           WXREAD_CURL_BASH: ${{ secrets.WXREAD_CURL_BASH }}
-          READ_MINUTES: ${{ steps.duration.outputs.minutes }}
+          READ_MINUTES: ${{ steps.plan.outputs.minutes }}
         run: python main.py
