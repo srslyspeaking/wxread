@@ -1,4 +1,4 @@
-name: WeRead weekly 10-15h
+name: WeRead daily 2-3h
 
 on:
   schedule:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       read_minutes:
-        description: "本次目标阅读分钟数（1-150；留空则使用仓库变量 READ_MINUTES 或默认 60）"
+        description: "本次目标阅读分钟数（1-180；留空则使用仓库变量 READ_MINUTES 或默认 60）"
         required: false
         type: string
 
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   read:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 210
 
     steps:
       - name: Pause automatic reading until Monday
@@ -63,7 +63,7 @@ jobs:
           --require-hashes
           --requirement requirements.txt
 
-      - name: Resolve weekly reading plan
+      - name: Resolve daily reading plan
         if: steps.gate.outputs.should_run == 'true'
         id: plan
         env:
@@ -90,7 +90,7 @@ jobs:
                   f"{name} {value}m" for name, value in zip(weekdays, plan)
               )
               summary = (
-                  f"ISO week target: {weekly_total} minutes; "
+                  f"ISO week total: {weekly_total} minutes; "
                   f"today: {minutes} minutes; plan: {formatted_plan}"
               )
 
