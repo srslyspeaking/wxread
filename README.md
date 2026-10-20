@@ -32,10 +32,10 @@
 2. 打开仓库 **Settings → Secrets and variables → Actions → Secrets**，新建 Repository secret：
    - 名称：`WXREAD_CURL_BASH`
    - 值：上面从 `read` 请求复制的完整 Bash cURL。程序只解析它，不会把它当作命令执行。
-3. 可选：在同一页面的 **Variables** 新建 `READ_MINUTES`，值为 `1` 到 `150`。它只作为手动运行的默认值；定时任务使用自动生成的周计划。
-4. 打开 **Actions → WeRead weekly 10-15h → Run workflow** 可手动验证。手动运行时也可临时填写分钟数；手动运行不计入自动周计划。
+3. 可选：在同一页面的 **Variables** 新建 `READ_MINUTES`，值为 `1` 到 `180`。它只作为手动运行的默认值；定时任务使用自动生成的每日计划。
+4. 打开 **Actions → WeRead daily 2-3h → Run workflow** 可手动验证。手动运行时也可临时填写分钟数；手动运行不计入自动计划。
 
-工作流会暂停自动阅读到 2026-10-19，之后按 `Europe/Brussels` 时区每天 15:17 执行一次，并自动适配夏令时。每个 ISO 周会生成一份稳定的伪随机计划：周总时长为 600–900 分钟，每天 60–150 分钟，以 5 分钟为粒度分配。同一周重试时计划不会改变。
+工作流按 `Europe/Brussels` 时区每天 15:17 执行一次，并自动适配夏令时。每个 ISO 周会预先生成 7 个稳定的伪随机时长：每天 120–180 分钟，以 5 分钟为粒度。同一天重试时时长不会改变。
 
 GitHub 定时任务可能因平台负载而延迟或丢失，所以上述数值是计划目标，不是对实际记账时长的保证。公开仓库连续 60 天没有仓库活动时，GitHub 可能自动停用定时工作流，需要到 Actions 页面重新启用。工作流权限仅为 `contents: read`，依赖和官方 Actions 均已固定版本；未使用第三方 keepalive、DNS 改写或通知服务。
 

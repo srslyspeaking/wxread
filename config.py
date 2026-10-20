@@ -11,7 +11,7 @@ import shlex
 
 READ_INTERVAL_SECONDS = 30
 DEFAULT_READ_MINUTES = 68
-MAX_READ_MINUTES = 150
+MAX_READ_MINUTES = 180
 
 
 def _positive_int(value, name):
