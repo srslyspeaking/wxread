@@ -27,35 +27,19 @@ jobs:
     timeout-minutes: 210
 
     steps:
-      - name: Pause automatic reading until Monday
-        id: gate
-        shell: bash
-        run: |
-          local_date="$(TZ=Europe/Brussels date +%F)"
-          printf 'local_date=%s\n' "$local_date" >> "$GITHUB_OUTPUT"
-          if [[ "$local_date" < "2026-10-19" ]]; then
-            printf 'should_run=false\n' >> "$GITHUB_OUTPUT"
-            echo "Automatic reading is paused through 2026-10-18."
-          else
-            printf 'should_run=true\n' >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
-        if: steps.gate.outputs.should_run == 'true'
         # actions/checkout v6; pinned to an immutable commit.
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
 
       - name: Set up Python
-        if: steps.gate.outputs.should_run == 'true'
         # actions/setup-python v6; pinned to an immutable commit.
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
 
       - name: Install locked dependencies
-        if: steps.gate.outputs.should_run == 'true'
         run: >-
           python -m pip install
           --disable-pip-version-check
@@ -64,14 +48,13 @@ jobs:
           --requirement requirements.txt
 
       - name: Resolve daily reading plan
-        if: steps.gate.outputs.should_run == 'true'
         id: plan
         env:
           EVENT_NAME: ${{ github.event_name }}
-          LOCAL_DATE: ${{ steps.gate.outputs.local_date }}
           MANUAL_MINUTES: ${{ inputs.read_minutes }}
           DEFAULT_MINUTES: ${{ vars.READ_MINUTES || '60' }}
         run: |
+          export LOCAL_DATE="$(TZ=Europe/Brussels date +%F)"
           python - <<'PY'
           import os
           from datetime import date
@@ -102,7 +85,6 @@ jobs:
           PY
 
       - name: Run WeRead automation
-        if: steps.gate.outputs.should_run == 'true'
         env:
           WXREAD_CURL_BASH: ${{ secrets.WXREAD_CURL_BASH }}
           READ_MINUTES: ${{ steps.plan.outputs.minutes }}
