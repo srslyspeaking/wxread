@@ -2,9 +2,9 @@ name: WeRead daily 2-3h
 
 on:
   schedule:
-    # Keep the start away from the top of the hour, where scheduled runs are
-    # more likely to be delayed. The time is local to Europe/Brussels.
-    - cron: "17 15 * * *"
+    # Start earlier to allow for scheduler delays. Actual execution is guarded
+    # below: start 09:00-19:00, stop by 22:00, all in Europe/Brussels.
+    - cron: "17 10 * * *"
       timezone: "Europe/Brussels"
   workflow_dispatch:
     inputs:
@@ -27,19 +27,34 @@ jobs:
     timeout-minutes: 210
 
     steps:
+      - name: Check daytime window
+        id: window
+        shell: bash
+        run: |
+          local_hour=$(TZ=Europe/Brussels date +%H)
+          if (( 10#$local_hour >= 9 && 10#$local_hour < 19 )); then
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'allowed=false' >> "$GITHUB_OUTPUT"
+            echo 'Skipped: outside the 09:00-19:00 start window (Europe/Brussels).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Checkout repository
+        if: steps.window.outputs.allowed == 'true'
         # actions/checkout v6; pinned to an immutable commit.
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
 
       - name: Set up Python
+        if: steps.window.outputs.allowed == 'true'
         # actions/setup-python v6; pinned to an immutable commit.
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
 
       - name: Install locked dependencies
+        if: steps.window.outputs.allowed == 'true'
         run: >-
           python -m pip install
           --disable-pip-version-check
@@ -48,6 +63,7 @@ jobs:
           --requirement requirements.txt
 
       - name: Resolve daily reading plan
+        if: steps.window.outputs.allowed == 'true'
         id: plan
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -85,7 +101,35 @@ jobs:
           PY
 
       - name: Run WeRead automation
+        if: steps.window.outputs.allowed == 'true'
         env:
           WXREAD_CURL_BASH: ${{ secrets.WXREAD_CURL_BASH }}
           READ_MINUTES: ${{ steps.plan.outputs.minutes }}
-        run: python main.py
+        shell: bash
+        run: |
+          # Recheck after setup/queue delays, immediately before reading.
+          read -r local_hour local_date < <(TZ=Europe/Brussels date '+%H %F')
+          if (( 10#$local_hour < 9 || 10#$local_hour >= 19 )); then
+            echo 'Skipped: setup finished outside the 09:00-19:00 start window.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          deadline=$(TZ=Europe/Brussels date --date="$local_date 22:00:00" +%s)
+          # Leave five seconds for process launch/termination; timeout 0 would
+          # disable the limit, so fail closed if no time remains.
+          seconds_left=$((deadline - $(date +%s) - 5))
+          if (( seconds_left <= 0 )); then
+            echo 'Skipped: the 22:00 local cutoff has been reached.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # KILL the entire timeout process group at the cutoff. Both automatic
+          # and manual runs obey the same boundary; no overnight catch-up.
+          if timeout --signal=KILL "${seconds_left}s" python main.py; then
+            exit 0
+          else
+            result=$?
+            echo "Reading stopped with exit code $result (22:00 cutoff enforced)." >> "$GITHUB_STEP_SUMMARY"
+            exit "$result"
+          fi
+
